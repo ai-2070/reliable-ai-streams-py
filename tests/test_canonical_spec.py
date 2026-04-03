@@ -307,6 +307,103 @@ class TestAllErrorCodesExist:
 
 
 # ============================================================================
+# Network Error Classification Tests
+# ============================================================================
+
+
+from l0.errors import (
+    NetworkErrorType,
+    analyze_network_error,
+    is_network_error,
+)
+
+
+class TestNetworkErrorClassification:
+    """Tests for network error classification from canonical spec."""
+
+    @pytest.fixture
+    def network_error_types(self) -> dict[str, Any]:
+        return SPEC["networkErrorTypes"]["types"]
+
+
+class TestConnectionDroppedDetection(TestNetworkErrorClassification):
+    def test_detection_patterns(self, network_error_types: dict[str, Any]) -> None:
+        patterns = network_error_types["connection_dropped"]["detection"]
+        for pattern in patterns:
+            error = Exception(f"Network: {pattern}")
+            analysis = analyze_network_error(error)
+            assert analysis.type == NetworkErrorType.CONNECTION_DROPPED, (
+                f'Expected CONNECTION_DROPPED for "{pattern}", got {analysis.type}'
+            )
+            assert analysis.retryable is True
+            assert analysis.counts_toward_limit is False
+
+
+class TestDnsErrorDetection(TestNetworkErrorClassification):
+    def test_detection_patterns(self, network_error_types: dict[str, Any]) -> None:
+        patterns = network_error_types["dns_error"]["detection"]
+        for pattern in patterns:
+            error = Exception(f"DNS error: {pattern}")
+            analysis = analyze_network_error(error)
+            assert analysis.type == NetworkErrorType.DNS_ERROR, (
+                f'Expected DNS_ERROR for "{pattern}", got {analysis.type}'
+            )
+            assert analysis.retryable is True
+
+
+class TestSslErrorDetection(TestNetworkErrorClassification):
+    def test_detection_patterns_non_retryable(
+        self, network_error_types: dict[str, Any]
+    ) -> None:
+        patterns = network_error_types["ssl_error"]["detection"]
+        for pattern in patterns:
+            error = Exception(f"SSL error: {pattern}")
+            analysis = analyze_network_error(error)
+            assert analysis.type == NetworkErrorType.SSL_ERROR, (
+                f'Expected SSL_ERROR for "{pattern}", got {analysis.type}'
+            )
+            assert analysis.retryable is False
+
+
+class TestTimeoutDetection(TestNetworkErrorClassification):
+    def test_detection_patterns(self, network_error_types: dict[str, Any]) -> None:
+        patterns = network_error_types["timeout"]["detection"]
+        for pattern in patterns:
+            error = Exception(f"Request {pattern}")
+            analysis = analyze_network_error(error)
+            assert analysis.type == NetworkErrorType.TIMEOUT, (
+                f'Expected TIMEOUT for "{pattern}", got {analysis.type}'
+            )
+            assert analysis.retryable is True
+
+
+class TestFetchErrorDetection(TestNetworkErrorClassification):
+    def test_detect_failed_to_fetch(self) -> None:
+        error = TypeError("Failed to fetch")
+        analysis = analyze_network_error(error)
+        assert analysis.type == NetworkErrorType.FETCH_ERROR
+        assert analysis.retryable is True
+
+    def test_detect_network_request_failed(self) -> None:
+        error = TypeError("Network request failed")
+        analysis = analyze_network_error(error)
+        assert analysis.type == NetworkErrorType.FETCH_ERROR
+        assert analysis.retryable is True
+
+
+class TestIsNetworkErrorUtility:
+    def test_returns_true_for_network_errors(self) -> None:
+        assert is_network_error(Exception("connection dropped")) is True
+        assert is_network_error(Exception("econnreset")) is True
+        assert is_network_error(Exception("dns lookup failed")) is True
+        assert is_network_error(Exception("request timeout")) is True
+
+    def test_returns_false_for_non_network_errors(self) -> None:
+        assert is_network_error(Exception("Invalid JSON")) is False
+        assert is_network_error(Exception("Schema validation failed")) is False
+
+
+# ============================================================================
 # Observability Events Tests
 # ============================================================================
 

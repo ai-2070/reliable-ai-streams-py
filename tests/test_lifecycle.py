@@ -812,13 +812,12 @@ class TestLifecycleFallbackFlow:
         assert len(fallback_starts) == 2
 
         # First fallback: from primary (0) to first fallback (1)
-        # Python uses snake_case for event fields
         assert fallback_starts[0].data.get("fromIndex") == 0
-        assert fallback_starts[0].data.get("index") == 1
+        assert fallback_starts[0].data.get("toIndex") == 1
 
         # Second fallback: from first fallback (1) to second fallback (2)
         assert fallback_starts[1].data.get("fromIndex") == 1
-        assert fallback_starts[1].data.get("index") == 2
+        assert fallback_starts[1].data.get("toIndex") == 2
 
 
 # ============================================================================
