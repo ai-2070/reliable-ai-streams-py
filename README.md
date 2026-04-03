@@ -124,8 +124,8 @@ from openai import AsyncOpenAI
 client = l0.wrap(
     AsyncOpenAI(),
     guardrails=l0.Guardrails.recommended(),
-    retry=l0.Retry(max_attempts=5),
-    timeout=l0.Timeout(initial_token=10.0, inter_token=30.0),
+    retry=l0.Retry(attempts=5),
+    timeout=l0.Timeout(initial_token=10000, inter_token=30000),
     continue_from_last_good_token=True,  # Resume from checkpoint on failure
 )
 
@@ -199,7 +199,7 @@ result = await l0.run(
         messages=[{"role": "user", "content": prompt}],
         stream=True,
     ),
-    on_event=lambda event: (
+    on_stream_event=lambda event: (
         print(event.text, end="") if event.is_token else
         print(f"\nError: {event.error}") if event.is_error else
         print("\nDone!") if event.is_complete else None
@@ -243,20 +243,23 @@ import l0
 
 prompts = ["Name a fruit", "Name a color", "Name an animal"]
 
-results = await l0.parallel(
+result = await l0.parallel(
     tasks=[
-        lambda p=p: client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": p}],
-            stream=True,
+        lambda p=p: l0.run(
+            stream=lambda: client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[{"role": "user", "content": p}],
+                stream=True,
+            ),
         )
         for p in prompts
     ],
     concurrency=3,
 )
 
-for prompt, result in zip(prompts, results):
-    print(f"{prompt}: {result.state.content.strip()}")
+for prompt, stream in zip(prompts, result.results):
+    text = await stream.read()
+    print(f"{prompt}: {text.strip()}")
 ```
 
 ### Pydantic Validation Models
@@ -327,8 +330,8 @@ pip install ai2070-l0[otel]
 # With Sentry
 pip install ai2070-l0[sentry]
 
-# Development
-pip install ai2070-l0[dev]
+# Development (dev is a dependency-group, not a pip extra)
+uv sync --group dev
 ```
 
 Or with uv:
@@ -353,11 +356,11 @@ uv add ai2070-l0 --extra litellm
 
 | Extra | Packages |
 | ----- | -------- |
-| `openai` | `openai>=1.30` |
+| `openai` | `openai>=2.0,<3.0` |
 | `litellm` | `litellm>=1.40` |
 | `otel` | `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-instrumentation-httpx` |
 | `sentry` | `sentry-sdk` |
-| `observability` | All of the above (convenience) |
+| `observability` | `otel` + `sentry` combined |
 | `speed` | `uvloop` (Unix only) |
 | `dev` | `pytest`, `pytest-asyncio`, `pytest-cov`, `mypy`, `ruff` |
 
