@@ -1067,7 +1067,7 @@ result = await l0.run(
 ### Fallback Events
 
 ```python
-{"type": "FALLBACK_START", "ts": ..., "from_model": ..., "to_model": ..., "reason": ...}
+{"type": "FALLBACK_START", "ts": ..., "fromIndex": ..., "toIndex": ..., "reason": ...}
 {"type": "FALLBACK_MODEL_SELECTED", "ts": ..., "index": ..., "model": ...}
 {"type": "FALLBACK_END", "ts": ..., "index": ..., "duration_ms": ...}
 ```

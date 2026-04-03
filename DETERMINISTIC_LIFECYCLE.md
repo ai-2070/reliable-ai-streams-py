@@ -142,7 +142,7 @@ This document specifies the **deterministic lifecycle behavior** of the L0 Pytho
 2. [error occurs, retries exhausted]
 3. RETRY_GIVE_UP
 4. on_error(error, will_retry=False, will_fallback=True)
-5. FALLBACK_START (index=1, fromIndex=0, reason="previous_failed")
+5. FALLBACK_START (fromIndex=0, toIndex=1, reason="previous_failed")
 6. FALLBACK_MODEL_SELECTED (index=1)
 7. on_fallback(0, "previous_failed")  # 0-based fallback index
 8. on_start(1, False, True)
@@ -359,7 +359,7 @@ The following `ObservabilityEventType` values are emitted during the lifecycle:
 
 | Event Type                | Description                              | Meta Fields            |
 | ------------------------- | ---------------------------------------- | ---------------------- |
-| `FALLBACK_START`          | Switching to fallback stream             | `index`, `fromIndex`, `reason` |
+| `FALLBACK_START`          | Switching to fallback stream             | `fromIndex`, `toIndex`, `reason` |
 | `FALLBACK_MODEL_SELECTED` | Fallback model selected                  | `index`                |
 | `FALLBACK_END`            | Fallback completed                       | `index`, `success`     |
 

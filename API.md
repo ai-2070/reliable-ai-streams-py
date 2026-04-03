@@ -471,7 +471,7 @@ def handle_event(event: l0.ObservabilityEvent):
         case l0.ObservabilityEventType.RETRY_ATTEMPT:
             print(f"Retrying (attempt {event.meta.get('attempt', '?')})")
         case l0.ObservabilityEventType.FALLBACK_START:
-            print(f"Switching to fallback {event.meta.get('index', '?')}")
+            print(f"Switching to fallback {event.meta.get('toIndex', '?')}")
         case l0.ObservabilityEventType.CHECKPOINT_SAVED:
             print(f"Checkpoint saved ({event.meta.get('token_count', 0)} tokens)")
         case l0.ObservabilityEventType.NETWORK_ERROR:
