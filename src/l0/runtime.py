@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Any, Coroutine, cast
 from .adapters import AdaptedEvent, Adapter, Adapters
 from .continuation import ContinuationConfig, deduplicate_continuation, detect_overlap
 from .drift import DriftDetector
-from .errors import Error, ErrorCode, ErrorContext
+from .errors import Error, ErrorCode, ErrorContext, FailureType, RecoveryStrategy
 from .events import EventBus, ObservabilityEventType
 from .logging import logger
 from .retry import RetryManager
@@ -59,6 +59,39 @@ def _next_callback_id() -> str:
 if TYPE_CHECKING:
     from .events import ObservabilityEvent
     from .guardrails import GuardrailRule, GuardrailViolation
+
+
+def _get_failure_type(error: Exception) -> str:
+    """Classify the failure type of an error (matches TS getFailureType)."""
+    from .errors import Error as L0Error, ErrorCode as L0ErrorCode, is_network_error
+
+    if isinstance(error, L0Error):
+        code = error.code
+        if code in (L0ErrorCode.INITIAL_TOKEN_TIMEOUT, L0ErrorCode.INTER_TOKEN_TIMEOUT):
+            return FailureType.TIMEOUT.value
+        if code == L0ErrorCode.ZERO_OUTPUT:
+            return FailureType.ZERO_OUTPUT.value
+        if code == L0ErrorCode.NETWORK_ERROR:
+            return FailureType.NETWORK.value
+        if code == L0ErrorCode.STREAM_ABORTED:
+            return FailureType.ABORT.value
+
+    if isinstance(error, TimeoutError):
+        return FailureType.TIMEOUT.value
+
+    if is_network_error(error):
+        return FailureType.NETWORK.value
+
+    return FailureType.UNKNOWN.value
+
+
+def _get_recovery_strategy(will_retry: bool, will_fallback: bool) -> str:
+    """Determine recovery strategy (matches TS getRecoveryStrategy)."""
+    if will_retry:
+        return RecoveryStrategy.RETRY.value
+    if will_fallback:
+        return RecoveryStrategy.FALLBACK.value
+    return RecoveryStrategy.HALT.value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -349,10 +382,12 @@ async def _internal_run(
             if is_fallback:
                 logger.debug(f"Trying fallback {fallback_idx}")
                 reason = "previous_failed"
+                # Reset attempt number for fallback stream (TS parity)
+                attempt_number = 0
                 event_bus.emit(
                     ObservabilityEventType.FALLBACK_START,
-                    index=fallback_idx,
                     fromIndex=fallback_idx - 1,
+                    toIndex=fallback_idx,
                     reason=reason,
                 )
                 event_bus.emit(
@@ -380,6 +415,7 @@ async def _internal_run(
                     event_bus.emit(
                         ObservabilityEventType.ATTEMPT_START,
                         attempt=attempt_number,
+                        isRetry=True,
                         isFallback=is_fallback,
                     )
 
@@ -1095,10 +1131,22 @@ async def _internal_run(
                     # Fire on_error callback BEFORE retry/fallback decision
                     _fire_callback(cb.on_error, e, will_retry, will_fallback)
 
+                    # Build recovery policy (matches TS)
+                    error_code = getattr(e, "code", None)
                     event_bus.emit(
                         ObservabilityEventType.ERROR,
                         error=str(e),
-                        category=error_category.value,
+                        errorCode=error_code.value if error_code else None,
+                        failureType=_get_failure_type(e),
+                        recoveryStrategy=_get_recovery_strategy(will_retry, will_fallback),
+                        policy={
+                            "retryEnabled": retry_mgr.config.max_retries > 0,
+                            "fallbackEnabled": len(streams) > 1,
+                            "maxRetries": retry_mgr.config.max_retries,
+                            "maxFallbacks": len(streams) - 1,
+                            "attempt": attempt_number,
+                            "fallbackIndex": fallback_idx,
+                        },
                     )
 
                     if will_retry:
