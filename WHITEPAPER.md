@@ -10,23 +10,11 @@
 
 Modern LLM applications increasingly depend on _streaming_ responses: chat UIs, agent runtimes, tool-call orchestration, real-time summarization, structured extraction, and multimodal generation. But today's provider streams are not a reliable substrate. They are best-effort event feeds whose failure modes make production reliability, auditability, and reproducibility expensive and fragile.
 
-**L0** is a deterministic streaming execution substrate (DSES) that wraps provider streams and upgrades them into a contract you can build systems on. It provides:
+**L0** (`ai2070-l0`) is a deterministic streaming execution substrate that wraps existing model streams and upgrades them into a contract you can build systems on. It provides token-level normalization, smart retries with error-category-aware backoff, streaming guardrails, drift detection, checkpoint-based resumption, model fallbacks, multi-model consensus, structured output validation, streaming pipelines, document windowing, event sourcing with deterministic replay, and built-in telemetry with OpenTelemetry and Sentry integrations.
 
-- **Normalized events and state** - a unified stream shape regardless of provider.
-- **Smart retries with error-aware routing** - network failures don't burn model retry budgets.
-- **Streaming guardrails** - pure validation over live token streams (JSON, Markdown, LaTeX, patterns).
-- **Drift detection** - tone shifts, repetition loops, entropy spikes, format collapse caught in real time.
-- **Checkpoint-based resumption** - continue from the last known good position instead of starting over.
-- **Fallback chains** - high availability across models and providers with a single contract.
-- **Multi-model consensus** - run multiple streams, compare outputs, resolve disagreements.
-- **Parallel execution patterns** - race, fan-out, batched, and pooled operations.
-- **Event sourcing** - record every token-level operation; replay deterministically for debugging and audits.
-- **Built-in telemetry** - timing, throughput, errors, retries, violations, drift, and network diagnostics.
-- **Structured output** - schema validation (Pydantic/JSON Schema) with auto-correction for truncation.
-- **Tool call support** - first-class detection and buffering of streaming tool calls.
-- **Multimodal payloads** - image, audio, video, and file outputs with metadata.
+L0 is provider-agnostic. Built-in adapters support OpenAI, Anthropic, and LiteLLM (100+ providers), with an extensible adapter registry for custom providers. It handles text, structured JSON, and multimodal streams (image, audio, video) under the same deterministic contract.
 
-L0 is provider-agnostic, fully async, strictly typed, and designed to stay far ahead of model inference speeds.
+Available in Python (`uv add ai2070-l0`) and TypeScript (`npm install @ai2070/l0`) with full lifecycle and event signature parity.
 
 ---
 
@@ -76,9 +64,12 @@ L0 treats a model stream as a noisy transport and upgrades it into a determinist
    Telemetry is built in and returned alongside results. Optional integrations with OpenTelemetry and Sentry are available but not required.
 
 5. **Performance headroom.**
-   The substrate must stay far ahead of model inference speeds. L0 uses incremental state tracking, sliding-window analysis, and tunable check intervals. Even with the full feature stack enabled, throughput exceeds **300,000 tokens/second** in benchmarks.
+   The substrate must stay far ahead of model inference speeds. L0 uses incremental state tracking, sliding-window analysis, and tunable check intervals. Even with the full feature stack enabled, throughput exceeds **108,000 tokens/second** in benchmarks - orders of magnitude above current inference speeds.
 
-6. **Type safety.**
+6. **Safety-first defaults.**
+   Checkpoint continuation is off by default. Structured objects are never resumed mid-stream. No silent corruption. Every opt-in feature requires explicit enablement.
+
+7. **Type safety.**
    Full strict-mode type checking (mypy), `py.typed` marker for downstream consumers, and every public API fully annotated.
 
 ---
@@ -121,7 +112,15 @@ For simpler integration, `l0.wrap()` wraps an OpenAI or LiteLLM client directly,
 
 ### Adapter Protocol
 
-L0 uses an adapter protocol to normalize provider-specific stream formats into unified `Event` objects. Built-in adapters cover OpenAI, Anthropic, and LiteLLM. Custom adapters can be registered for any streaming source that produces async iterables.
+L0 uses an adapter protocol to normalize provider-specific stream formats into unified `Event` objects:
+
+| Adapter | Handles |
+|---|---|
+| `OpenAIAdapter` | OpenAI SDK streams |
+| `LiteLLMAdapter` | LiteLLM streams (OpenAI-compatible, 100+ providers) |
+| `EventPassthroughAdapter` | Raw `Event` async iterators |
+
+For custom providers, L0 provides an adapter registry and helper functions (`to_l0_events()`, `token_event()`, `complete_event()`, `error_event()`, `data_event()`) to convert any async iterable into L0's normalized event format.
 
 ---
 
@@ -247,6 +246,16 @@ L0 recognizes 15+ network failure patterns and applies category-correct recovery
 
 Each pattern is classified into the error taxonomy so retry behavior is automatic and correct.
 
+### Zero-Token and Stall Protection
+
+A subtle failure mode: the model produces nothing, or produces a few tokens then stops. L0 detects:
+
+- **Zero output**: stream completes with no meaningful content.
+- **Early termination**: stream closes far sooner than expected.
+- **Mid-stream stalls**: tokens stop arriving but the stream does not close.
+
+These are treated as recoverable failures, triggering retry or fallback automatically.
+
 ### Fallback Chains
 
 When retries are exhausted, L0 falls through to a configurable sequence of fallback stream factories. This enables high-availability execution across models or providers while preserving a single deterministic contract to the application. Each fallback gets its own full retry budget.
@@ -364,7 +373,16 @@ Some tasks benefit from comparing independent generations. L0's consensus primit
 | `weighted` | Custom weights per output |
 | `best` | Highest quality by scoring function |
 
-For structured outputs, consensus can operate field-by-field, enabling fine-grained agreement checks. Presets (`strict`, `standard`, `lenient`, `best`) cover common configurations.
+When outputs disagree, L0 applies a configurable conflict resolution mode:
+
+| Resolution | Behavior |
+|---|---|
+| `vote` | Majority vote among conflicting values |
+| `merge` | Merge conflicting outputs intelligently |
+| `best` | Select the highest-quality conflicting value |
+| `fail` | Fail on conflict (strictest) |
+
+For structured outputs, consensus can operate field-by-field with agreement classification (`exact`, `similar`, `structural`, `semantic`) and disagreement severity (`minor`, `moderate`, `major`, `critical`). Presets (`strict`, `standard`, `lenient`, `best`) cover common configurations.
 
 ---
 
@@ -376,9 +394,28 @@ L0 provides composable patterns for multi-stream orchestration:
 - **Parallel**: fan-out with configurable concurrency limits, fan-in all results. For batch processing or multi-aspect extraction.
 - **Sequential**: ordered execution with result threading between stages.
 - **Pool**: operation pooling with resource management for sustained workloads.
-- **Pipeline**: multi-phase streaming workflows where each stage transforms the output of the previous.
+- **Pipeline**: multi-phase streaming workflows where each stage transforms the output of the previous. Supports conditional branching, step-level error handling, and chaining/parallelizing multiple pipelines.
+
+Pipeline presets: `FAST_PIPELINE` (fail fast), `RELIABLE_PIPELINE` (graceful failures), `PRODUCTION_PIPELINE` (timeouts + graceful).
 
 All patterns integrate with L0's retry, fallback, and telemetry systems.
+
+---
+
+## Document Windows
+
+For long documents that exceed model context limits, L0 provides built-in chunking with context preservation:
+
+| Strategy | Behavior |
+|---|---|
+| `token` | Token count-based chunking |
+| `char` | Character count-based chunking |
+| `paragraph` | Respect paragraph boundaries |
+| `sentence` | Respect sentence boundaries |
+
+Presets: `Window.small()` (1000 tokens, 100 overlap), `Window.medium()` (2000 tokens, 200 overlap), `Window.large()` (4000 tokens, 400 overlap), `Window.paragraph()`, `Window.sentence()`.
+
+Windows support parallel chunk processing (`process_all(concurrency=...)`) and sequential processing, with context restoration strategies (`adjacent`, `overlap`, `full`) for maintaining coherence across chunk boundaries.
 
 ---
 
@@ -408,6 +445,18 @@ Multimodal payloads are tracked in execution state and included in event sourcin
 
 ---
 
+## JSON Auto-Healing and Format Repair
+
+LLM output frequently arrives with structural defects. L0 provides automatic repair utilities:
+
+- **JSON**: missing closing braces/brackets/quotes, trailing commas, duplicate quotes, extraction from surrounding prose or Markdown fences, single-to-double quote conversion, comment stripping, control character escaping.
+- **Markdown**: unterminated code fences.
+- **Tool calls**: malformed function call arguments.
+
+These repairs are applied only when explicitly enabled (`auto_correct=True`) and are tracked - corrections report exactly what was fixed, so repairs are never silent.
+
+---
+
 ## Event Sourcing and Deterministic Replay
 
 Reliability alone is insufficient for production systems. Debugging, auditing, and compliance demand reproducibility.
@@ -433,7 +482,9 @@ Events are stored via an `EventStore` interface. L0 ships with `InMemoryEventSto
 
 ### Replay
 
-In replay mode, L0 performs **no network calls**, executes **no retries**, and runs **no recomputation** of guardrails or drift. It rehydrates the exact recorded event sequence, producing bit-for-bit identical output.
+In replay mode, L0 performs **no network calls**, executes **no retries**, and runs **no recomputation** of guardrails or drift. It rehydrates the exact recorded events, producing deterministic reproduction. Lifecycle callbacks still fire during replay (for testing and debugging), but no side effects occur.
+
+Replay supports configurable playback speed (0 = instant, 1 = real-time), partial replay via sequence ranges (`from_seq`/`to_seq`), token-only replay streams, and comparison between replays for consistency verification.
 
 This enables:
 
@@ -472,19 +523,39 @@ These are strictly optional - L0's built-in telemetry works without any external
 
 ## Performance
 
-L0 is designed to stay far ahead of model inference speeds. Current models stream at roughly 50–200 tokens/second. L0's overhead is negligible at those rates.
+L0 is designed to stay far ahead of model inference speeds, even with the full feature stack enabled.
 
-Key performance techniques:
+### Benchmark Results (Apple M1 Max, Python 3.13, zero-delay mock streams)
+
+| Scenario | Tokens/s | Avg Duration | TTFT | Overhead |
+|---|---|---|---|---|
+| Baseline (raw streaming) | 1,518,271 | 1.32 ms | 0.02 ms | - |
+| L0 Core (no features) | 551,696 | 3.63 ms | 0.08 ms | 175% |
+| L0 + JSON Guardrail | 469,922 | 4.26 ms | 0.07 ms | 223% |
+| L0 + All Guardrails | 367,328 | 5.44 ms | 0.08 ms | 313% |
+| L0 + Drift Detection | 119,758 | 16.70 ms | 0.08 ms | 1166% |
+| **L0 Full Stack** | **108,257** | **18.48 ms** | **0.07 ms** | **1301%** |
+
+### Key Optimizations
 
 | Technique | Effect |
 |---|---|
 | Incremental JSON state tracking | O(delta) per token, not O(content) |
 | Sliding-window drift detection | O(window_size), not O(content_length) |
 | Fast/slow guardrail split | Heavy scans deferred to async |
-| Tunable check intervals | Guardrails/drift/checkpoints run every N tokens |
+| Tunable check intervals | Guardrails every 15 tokens, drift every 25, checkpoints every 20 |
 | Lazy module loading | Only imported features incur startup cost |
 
-Benchmarks on mock zero-delay token streams (worst case - no natural pacing from model inference) show L0 sustains **300,000+ tokens/second** with the full feature stack enabled: guardrails, drift detection, checkpointing, and telemetry. This provides three orders of magnitude of headroom over real-world streaming rates.
+### Inference Speed Headroom
+
+Even with the full stack enabled, L0 sustains ~108K tokens/s - orders of magnitude above current and next-generation inference hardware:
+
+| GPU Generation | Expected Tokens/s | L0 Headroom |
+|---|---|---|
+| Current (H100) | ~100-200 | 540-1,080x |
+| Blackwell (B200) | ~1,000+ | ~108x |
+
+The substrate will not be the bottleneck.
 
 ---
 
@@ -549,15 +620,36 @@ result = await l0.run(
 
 ---
 
+## Testing
+
+L0 is validated by 1,800+ unit tests and integration tests across 54 test files covering:
+
+- All guardrail rules (JSON, Markdown, LaTeX, pattern, zero output) and fast/slow path execution.
+- Drift detection (all seven drift types, sliding window behavior).
+- Retry logic (all backoff strategies, error categories, budget tracking).
+- Network error detection (all 15+ failure patterns).
+- Structured output (Pydantic, JSON Schema, auto-correction).
+- Consensus (all strategies and conflict resolution modes).
+- Parallel, race, pipeline, and pool operations.
+- Event sourcing (recording, replay, snapshots, storage backends, replay comparison).
+- Adapters (OpenAI, LiteLLM, Anthropic, custom).
+- Checkpoint resumption and continuation deduplication.
+- Timeout enforcement (TTFT and inter-token).
+- Canonical spec tests ensuring deterministic lifecycle parity with the TypeScript implementation.
+- Performance benchmarks.
+
+---
+
 ## Use Cases
 
-- **Production chat**: consistent streaming semantics with timeouts, retries, fallbacks, and telemetry - no more silent failures in user-facing UIs.
-- **Agent orchestration**: tool calls and partial failures are inevitable in agentic loops; L0 provides the recovery and observability layer.
-- **Structured extraction**: JSON output with schema enforcement and auto-correction, streamed to a live UI with end validation.
-- **Compliance and supervision**: guardrails, drift detection, and audit-ready replay logs for regulated environments.
-- **Low-latency pipelines**: race and parallel patterns for latency-sensitive paths; consensus for confidence amplification.
-- **Multi-provider reliability**: fallback chains across providers for high availability without application-level complexity.
-- **Debugging and testing**: event sourcing enables deterministic replay of production failures in local test environments.
+- **Production chat**: consistent streaming semantics, timeouts, retries, fallbacks, and telemetry for user-facing applications.
+- **Agent orchestration**: tool calls, partial failures, and multi-step reasoning with deterministic recovery at every step.
+- **Structured extraction**: guaranteed-valid JSON with schema enforcement, auto-correction, and retry on validation failure.
+- **Compliance and supervision**: guardrails, drift detection, and audit-ready replay logs for regulated industries.
+- **Low-latency pipelines**: race for fastest-provider-wins, parallel for fan-out/fan-in, pipe for multi-stage streaming.
+- **High-confidence generation**: multi-model consensus for safety-critical tasks where a single model's output is insufficient.
+- **Multimodal applications**: image, audio, and video generation with the same reliability guarantees as text.
+- **Long document processing**: document windowing with overlap for context-preserving chunking.
 
 ---
 
@@ -602,3 +694,14 @@ result = await l0.run(
 `START` · `TOKEN` · `CHECKPOINT` · `GUARDRAIL` · `DRIFT` · `RETRY` · `FALLBACK` · `CONTINUATION` · `COMPLETE` · `ERROR`
 
 Each event is timestamped and carries a type-specific payload sufficient for exact replay.
+
+## Appendix E: Feature Opt-In Model
+
+Heavy features use explicit enablement:
+
+- Drift detection: `drift=True`
+- Checkpoint continuation: `continuation=ContinuationConfig(enabled=True)`
+- Monitoring: `monitoring=MonitoringConfig(enabled=True)`
+- Structured auto-correction: `auto_correct=True`
+
+This ensures unused features incur no overhead.
