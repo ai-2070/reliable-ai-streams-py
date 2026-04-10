@@ -407,7 +407,6 @@ class DriftDetector:
             "entropy": list(self._history.entropy),
             "tokens": list(self._history.tokens),
             "last_content": self._history.last_window,
-            "last_window": self._history.last_window,
         }
 
 
