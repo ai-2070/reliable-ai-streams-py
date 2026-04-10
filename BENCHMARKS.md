@@ -12,12 +12,12 @@ Performance benchmarks measuring L0 (Python) overhead on high-throughput streami
 
 | Scenario                 | Tokens/s  | Avg Duration | TTFT    | Overhead |
 | ------------------------ | --------- | ------------ | ------- | -------- |
-| Baseline (raw streaming) | 1,518,271 | 1.32 ms      | 0.02 ms | -        |
-| L0 Core (no features)    | 551,696   | 3.63 ms      | 0.08 ms | 175%     |
-| L0 + JSON Guardrail      | 469,922   | 4.26 ms      | 0.07 ms | 223%     |
-| L0 + All Guardrails      | 367,328   | 5.44 ms      | 0.08 ms | 313%     |
-| L0 + Drift Detection     | 119,758   | 16.70 ms     | 0.08 ms | 1166%    |
-| L0 Full Stack            | 108,257   | 18.48 ms     | 0.07 ms | 1301%    |
+| Baseline (raw streaming) | 1,406,390 | 1.42 ms      | 0.02 ms | -        |
+| L0 Core (no features)    | 596,086   | 3.36 ms      | 0.10 ms | 136%     |
+| L0 + JSON Guardrail      | 557,550   | 3.59 ms      | 0.09 ms | 152%     |
+| L0 + All Guardrails      | 547,991   | 3.65 ms      | 0.09 ms | 157%     |
+| L0 + Drift Detection     | 114,935   | 17.41 ms     | 0.10 ms | 1124%    |
+| L0 Full Stack            | 114,895   | 17.43 ms     | 0.10 ms | 1126%    |
 
 **Legend:**
 - **Tokens/s** = Throughput (higher is better)
@@ -60,12 +60,12 @@ result = await l0.run(
 
 ## Nvidia Blackwell Ready
 
-Even with full guardrails, drift detection, and checkpointing enabled, L0 sustains **108K+ tokens/s** - well above current LLM inference speeds and ready for Nvidia Blackwell's 1000+ tokens/s streaming.
+Even with full guardrails, drift detection, and checkpointing enabled, L0 sustains **114K+ tokens/s** - well above current LLM inference speeds and ready for Nvidia Blackwell's 1000+ tokens/s streaming.
 
 | GPU Generation   | Expected Tokens/s | L0 Headroom |
 | ---------------- | ----------------- | ----------- |
-| Current (H100)   | ~100-200          | 540-1080x   |
-| Blackwell (B200) | ~1000+            | 108x        |
+| Current (H100)   | ~100-200          | 574-1149x   |
+| Blackwell (B200) | ~1000+            | 114x        |
 
 ## Python Version Note
 
