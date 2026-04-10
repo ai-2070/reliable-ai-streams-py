@@ -1,0 +1,25 @@
+src/l0/guardrails.py
+  bd6baeda8f5b0cba 1590,1891,1904-1910
+src/l0/drift.py
+  bd6baeda8f5b0cba 410
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "3e2971aba380058721615dfc94608ad3c741423e",
+  "prompts": {
+    "bd6baeda8f5b0cba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02dc7a8d-74f3-42a8-9266-dc46435088bb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "LZL0",
+      "messages": [],
+      "total_additions": 10,
+      "total_deletions": 3,
+      "accepted_lines": 10,
+      "overriden_lines": 0
+    }
+  }
+}
