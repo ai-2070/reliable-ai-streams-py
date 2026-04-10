@@ -1,0 +1,31 @@
+src/l0/types.py
+  bd6baeda8f5b0cba 268
+src/l0/state.py
+  bd6baeda8f5b0cba 15-22,25,30,35,41
+src/l0/guardrails.py
+  bd6baeda8f5b0cba 1563,1566,1573,1576-1579,1752-1755,1763,1888-1894,1896-1907,1909,1915-1916
+src/l0/runtime.py
+  bd6baeda8f5b0cba 19,485,722-726,733-734,736-737,739-741,743-755,757-772,775-784,792-802,809,1205
+src/l0/drift.py
+  bd6baeda8f5b0cba 17,137-139,167-170,198,200,253-254,399-402,407-409
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "f422e13f6567d94828a2d92c3bb8f05ecc183856",
+  "prompts": {
+    "bd6baeda8f5b0cba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02dc7a8d-74f3-42a8-9266-dc46435088bb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "LZL0",
+      "messages": [],
+      "total_additions": 147,
+      "total_deletions": 97,
+      "accepted_lines": 141,
+      "overriden_lines": 0
+    }
+  }
+}

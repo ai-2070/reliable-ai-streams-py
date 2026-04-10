@@ -1,0 +1,27 @@
+src/l0/runtime.py
+  bd6baeda8f5b0cba 19,733,809
+src/l0/state.py
+  bd6baeda8f5b0cba 21-26
+src/l0/types.py
+  bd6baeda8f5b0cba 263-284,289,316-320
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.2.8",
+  "base_commit_sha": "5c14282560391a74f79e52d7fa0902b5a53ac569",
+  "prompts": {
+    "bd6baeda8f5b0cba": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "02dc7a8d-74f3-42a8-9266-dc46435088bb",
+        "model": "claude-opus-4-6"
+      },
+      "human_author": "LZL0",
+      "messages": [],
+      "total_additions": 43,
+      "total_deletions": 21,
+      "accepted_lines": 37,
+      "overriden_lines": 0
+    }
+  }
+}
