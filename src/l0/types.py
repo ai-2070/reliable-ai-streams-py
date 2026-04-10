@@ -265,6 +265,7 @@ class State:
     """Runtime state tracking."""
 
     content: str = ""
+    _content_buffer: list[str] = field(default_factory=list, init=False, repr=False, compare=False)
     checkpoint: str = ""  # Last known good slice for continuation
     token_count: int = 0
     model_retry_count: int = 0
