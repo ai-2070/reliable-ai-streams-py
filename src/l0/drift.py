@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import math
 import re
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
@@ -133,9 +134,9 @@ class DriftConfig:
 class _DriftHistory:
     """Internal history tracking for drift detection."""
 
-    entropy: list[float] = field(default_factory=list)
-    tokens: list[str] = field(default_factory=list)
-    last_content: str = ""
+    entropy: deque[float] = field(default_factory=lambda: deque(maxlen=50))
+    tokens: deque[str] = field(default_factory=lambda: deque(maxlen=50))
+    last_window: str = ""  # Store only the window, not full content
 
 
 class DriftDetector:
@@ -163,7 +164,10 @@ class DriftDetector:
             config: Detection configuration (uses defaults if not provided)
         """
         self.config = config or DriftConfig()
-        self._history = _DriftHistory()
+        self._history = _DriftHistory(
+            entropy=deque(maxlen=self.config.entropy_window),
+            tokens=deque(maxlen=self.config.entropy_window),
+        )
 
     def _get_window(self, content: str) -> str:
         """Get sliding window of content for analysis.
@@ -191,13 +195,11 @@ class DriftDetector:
 
         # Use sliding window for content analysis (O(window_size) instead of O(content_length))
         window = self._get_window(content)
-        last_window = self._get_window(self._history.last_content)
+        last_window = self._history.last_window
 
-        # Update history
+        # Update history (deque handles maxlen automatically)
         if delta:
             self._history.tokens.append(delta)
-            if len(self._history.tokens) > self.config.entropy_window:
-                self._history.tokens.pop(0)
 
         # Check for meta commentary (on window only)
         if self.config.detect_meta_commentary:
@@ -224,8 +226,6 @@ class DriftDetector:
         if self.config.detect_entropy_spike and delta:
             entropy = self._calculate_entropy(delta)
             self._history.entropy.append(entropy)
-            if len(self._history.entropy) > self.config.entropy_window:
-                self._history.entropy.pop(0)
 
             if self._detect_entropy_spike():
                 types.append("entropy_spike")
@@ -250,8 +250,8 @@ class DriftDetector:
             confidence = max(confidence, 0.5)
             details.append("Excessive hedging detected")
 
-        # Update last content
-        self._history.last_content = content
+        # Update last window (store only the window, not full content)
+        self._history.last_window = window
 
         return DriftResult(
             detected=len(types) > 0,
@@ -396,14 +396,17 @@ class DriftDetector:
 
     def reset(self) -> None:
         """Reset detector state."""
-        self._history = _DriftHistory()
+        self._history = _DriftHistory(
+            entropy=deque(maxlen=self.config.entropy_window),
+            tokens=deque(maxlen=self.config.entropy_window),
+        )
 
     def get_history(self) -> dict[str, Any]:
         """Get detection history."""
         return {
-            "entropy": self._history.entropy.copy(),
-            "tokens": self._history.tokens.copy(),
-            "last_content": self._history.last_content,
+            "entropy": list(self._history.entropy),
+            "tokens": list(self._history.tokens),
+            "last_content": self._history.last_window,
         }
 
 

@@ -482,6 +482,7 @@ async def _internal_run(
                         # Checkpoint invalid - start fresh
                         logger.debug("Checkpoint validation failed, starting fresh")
                         state.content = ""
+                        state._content_buffer.clear()
                         state.token_count = 0
                         pending_checkpoint = None
 
@@ -718,59 +719,69 @@ async def _internal_run(
                                     state.token_count,
                                 )
 
-                            # Fire on_event callback for token events
-                            _fire_callback(cb.on_event, event)
-
-                            # Fire on_token callback
-                            _fire_callback(cb.on_token, token_text)
+                            # Fire per-token callbacks (skip function call overhead when None)
+                            if cb.on_event is not None:
+                                _fire_callback(cb.on_event, event)
+                            if cb.on_token is not None:
+                                _fire_callback(cb.on_token, token_text)
 
                             # Check guardrails periodically
                             if (
                                 state.token_count % guardrail_interval == 0
                                 and guardrails
                             ):
-                                phase_start_time = time.perf_counter()
-                                event_bus.emit(
-                                    ObservabilityEventType.GUARDRAIL_PHASE_START,
-                                    phase="post",
-                                    ruleCount=len(guardrails),
-                                )
+
+                                _has_obs = event_bus._handler is not None
+
+                                if _has_obs:
+                                    phase_start_time = time.perf_counter()
+                                    event_bus.emit(
+                                        ObservabilityEventType.GUARDRAIL_PHASE_START,
+                                        phase="post",
+                                        ruleCount=len(guardrails),
+                                    )
 
                                 all_violations = []
                                 for idx, rule in enumerate(guardrails):
-                                    callback_id = _next_callback_id()
-                                    rule_start_time = time.perf_counter()
-                                    event_bus.emit(
-                                        ObservabilityEventType.GUARDRAIL_RULE_START,
-                                        index=idx,
-                                        ruleId=rule.name,
-                                        callbackId=callback_id,
-                                    )
+                                    if _has_obs:
+                                        callback_id = _next_callback_id()
+                                        rule_start_time = time.perf_counter()
+                                        event_bus.emit(
+                                            ObservabilityEventType.GUARDRAIL_RULE_START,
+                                            index=idx,
+                                            ruleId=rule.name,
+                                            callbackId=callback_id,
+                                        )
+
                                     rule_violations = rule.check(state)
-                                    passed = len(rule_violations) == 0
-                                    rule_duration_ms = int(
-                                        (time.perf_counter() - rule_start_time) * 1000
-                                    )
-                                    # Emit result for each rule
-                                    event_bus.emit(
-                                        ObservabilityEventType.GUARDRAIL_RULE_RESULT,
-                                        index=idx,
-                                        ruleId=rule.name,
-                                        passed=passed,
-                                        violation=rule_violations[0].__dict__
-                                        if rule_violations
-                                        else None,
-                                    )
+
+                                    if _has_obs:
+                                        passed = len(rule_violations) == 0
+                                        rule_duration_ms = int(
+                                            (time.perf_counter() - rule_start_time) * 1000
+                                        )
+                                        event_bus.emit(
+                                            ObservabilityEventType.GUARDRAIL_RULE_RESULT,
+                                            index=idx,
+                                            ruleId=rule.name,
+                                            passed=passed,
+                                            violation=rule_violations[0].__dict__
+                                            if rule_violations
+                                            else None,
+                                        )
+
                                     if rule_violations:
                                         all_violations.extend(rule_violations)
-                                    event_bus.emit(
-                                        ObservabilityEventType.GUARDRAIL_RULE_END,
-                                        index=idx,
-                                        ruleId=rule.name,
-                                        passed=passed,
-                                        callbackId=callback_id,
-                                        durationMs=rule_duration_ms,
-                                    )
+
+                                    if _has_obs:
+                                        event_bus.emit(
+                                            ObservabilityEventType.GUARDRAIL_RULE_END,
+                                            index=idx,
+                                            ruleId=rule.name,
+                                            passed=passed,
+                                            callbackId=callback_id,
+                                            durationMs=rule_duration_ms,
+                                        )
 
                                 if all_violations:
                                     state.violations.extend(all_violations)
@@ -778,22 +789,24 @@ async def _internal_run(
                                     for v in all_violations:
                                         _fire_callback(cb.on_violation, v)
 
-                                phase_duration_ms = int(
-                                    (time.perf_counter() - phase_start_time) * 1000
-                                )
-                                event_bus.emit(
-                                    ObservabilityEventType.GUARDRAIL_PHASE_END,
-                                    phase="post",
-                                    passed=len(all_violations) == 0,
-                                    violations=[v.__dict__ for v in all_violations],
-                                    durationMs=phase_duration_ms,
-                                )
+                                if _has_obs:
+                                    phase_duration_ms = int(
+                                        (time.perf_counter() - phase_start_time) * 1000
+                                    )
+                                    event_bus.emit(
+                                        ObservabilityEventType.GUARDRAIL_PHASE_END,
+                                        phase="post",
+                                        passed=len(all_violations) == 0,
+                                        violations=[v.__dict__ for v in all_violations],
+                                        durationMs=phase_duration_ms,
+                                    )
 
                             # Check drift periodically
                             if (
                                 drift_detector is not None
                                 and state.token_count % drift_interval == 0
                             ):
+
                                 drift_result = drift_detector.check(
                                     state.content, token_text
                                 )
@@ -1189,6 +1202,7 @@ async def _internal_run(
                         else:
                             # Reset state for fresh retry (no continuation)
                             state.content = ""
+                            state._content_buffer.clear()
                             state.token_count = 0
                             state.checkpoint = ""
                             state.completed = False

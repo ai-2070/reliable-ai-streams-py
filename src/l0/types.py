@@ -260,11 +260,34 @@ class BackoffStrategy(str, Enum):
 # ─────────────────────────────────────────────────────────────────────────────
 
 
+class _ContentDescriptor:
+    """Descriptor that auto-flushes _content_buffer on read for O(n) total concat."""
+
+    def __set_name__(self, owner: type, name: str) -> None:
+        self._attr = "_content_value"
+
+    def __get__(self, obj: Any, objtype: type | None = None) -> Any:
+        if obj is None:
+            return self
+        buf = obj.__dict__.get("_content_buffer")
+        if buf:
+            obj.__dict__[self._attr] = obj.__dict__.get(self._attr, "") + "".join(buf)
+            buf.clear()
+        return obj.__dict__.get(self._attr, "")
+
+    def __set__(self, obj: Any, value: str) -> None:
+        obj.__dict__[self._attr] = value
+        buf = obj.__dict__.get("_content_buffer")
+        if buf:
+            buf.clear()
+
+
 @dataclass
 class State:
     """Runtime state tracking."""
 
-    content: str = ""
+    content: str = ""  # type: ignore[assignment]  # managed by _ContentDescriptor
+    _content_buffer: list[str] = field(default_factory=list, init=False, repr=False, compare=False)
     checkpoint: str = ""  # Last known good slice for continuation
     token_count: int = 0
     model_retry_count: int = 0
@@ -288,6 +311,11 @@ class State:
     continuation_used: bool = False  # Whether continuation was actually used
     deduplication_applied: bool = False  # Whether deduplication removed overlap
     overlap_removed: str | None = None  # The overlapping text that was removed
+
+
+# Install the descriptor after dataclass creation so it intercepts attribute access
+State.content = _ContentDescriptor()  # type: ignore[assignment]
+State.content.__set_name__(State, "content")
 
 
 # ─────────────────────────────────────────────────────────────────────────────

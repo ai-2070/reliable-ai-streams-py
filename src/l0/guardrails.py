@@ -1560,19 +1560,23 @@ def json_rule() -> GuardrailRule:
     # Incremental state for O(delta) streaming checks
     incremental_state = IncrementalJsonState()
     last_content_length = 0
+    is_json_content: bool | None = None  # Cache: None=unknown, True/False=determined
 
     def check(state: State) -> list[GuardrailViolation]:
-        nonlocal incremental_state, last_content_length
+        nonlocal incremental_state, last_content_length, is_json_content
 
         content = state.content
         if not content.strip():
             # Reset state when content is empty (new stream starting)
             incremental_state = IncrementalJsonState()
             last_content_length = 0
+            is_json_content = None
             return []
 
-        # Only check if it looks like JSON
-        if not looks_like_json(content):
+        # Only check if it looks like JSON (cache after first determination)
+        if is_json_content is None:
+            is_json_content = looks_like_json(content)
+        if not is_json_content:
             # Reset state when content doesn't look like JSON
             incremental_state = IncrementalJsonState()
             last_content_length = 0
@@ -1583,6 +1587,7 @@ def json_rule() -> GuardrailRule:
         if len(content) < last_content_length:
             incremental_state = IncrementalJsonState()
             last_content_length = 0
+            is_json_content = None
 
         violations = []
 
@@ -1745,6 +1750,10 @@ def markdown_rule() -> GuardrailRule:
     """
 
     def check(state: State) -> list[GuardrailViolation]:
+        # During streaming, markdown is always incomplete — skip expensive analysis
+        if not state.completed:
+            return []
+
         content = state.content
         if not content.strip():
             return []
@@ -1752,11 +1761,7 @@ def markdown_rule() -> GuardrailRule:
         analysis = analyze_markdown_structure(content)
         violations = []
 
-        # During streaming, only warn about unclosed fences
-        if not state.completed:
-            # This is expected during streaming, don't report
-            pass
-        else:
+        if True:
             # On completion, report issues
             for issue in analysis.issues:
                 severity: Severity = "warning"
@@ -1881,17 +1886,40 @@ def pattern_rule(
         for cat_patterns in categories.values():
             patterns.extend(cat_patterns)
 
+    # Pre-compile all patterns into a single combined regex for O(1) pass
+    combined = re.compile(
+        "|".join(f"(?:{p})" for p in patterns) if patterns else r"(?!x)x",
+        re.IGNORECASE | re.MULTILINE,
+    )
+    last_scanned_length = 0
+
     def check(state: State) -> list[GuardrailViolation]:
+        nonlocal last_scanned_length
+        content = state.content
+
+        # Reset tracking if content was replaced (e.g. new stream)
+        if len(content) < last_scanned_length:
+            last_scanned_length = 0
+
+        # On completion, do a full scan to catch anything delta scanning might miss
+        # (e.g. ^-anchored patterns that span chunk boundaries).
+        # During streaming, only scan new content + overlap for performance.
+        if state.completed:
+            scan_start = 0
+        else:
+            scan_start = max(0, last_scanned_length - 50)  # overlap for boundary matches
+        scan_region = content[scan_start:]
+        last_scanned_length = len(content)
+
         violations = []
-        matches = find_bad_patterns(state.content, patterns)
-        for pattern, match in matches:
+        for match in combined.finditer(scan_region):
             violations.append(
                 GuardrailViolation(
                     rule="pattern",
                     message=f"Matched unwanted pattern: {match.group()}",
                     severity="warning",
-                    position=match.start(),
-                    context={"pattern": pattern, "matched": match.group()},
+                    position=scan_start + match.start(),
+                    context={"matched": match.group()},
                 )
             )
         return violations
