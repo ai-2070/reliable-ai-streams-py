@@ -290,6 +290,21 @@ All L0 types have corresponding Pydantic models: `StateModel`, `RetryModel`, `Ti
 - **Pure asyncio** - No compatibility layers, native Python async
 - **Own retry logic** - No tenacity, full control over behavior
 
+## Performance
+
+Benchmarks on Apple M1 Max, Python 3.13, zero-delay mock streams (2000 tokens):
+
+| Scenario                 | Tokens/s    | Avg Duration | TTFT        |
+| ------------------------ | ----------- | ------------ | ----------- |
+| Baseline (raw streaming) | 1,406,390   | 1.42 ms      | 0.02 ms     |
+| L0 Core (no features)    | 596,086     | 3.36 ms      | 0.10 ms     |
+| L0 + JSON Guardrail      | 557,550     | 3.59 ms      | 0.09 ms     |
+| L0 + All Guardrails      | 547,991     | 3.65 ms      | 0.09 ms     |
+| L0 + Drift Detection     | 114,935     | 17.41 ms     | 0.10 ms     |
+| **L0 Full Stack**        | **114,895** | **17.43 ms** | **0.10 ms** |
+
+Full stack = JSON + Markdown + zero-output guardrails + drift detection + checkpointing. See [BENCHMARKS.md](./BENCHMARKS.md) for details.
+
 ## Documentation
 
 | Guide                                            | Description                              |
