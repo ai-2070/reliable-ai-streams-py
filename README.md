@@ -2,7 +2,7 @@
 
 ### The missing reliability and observability layer for all AI streams.
 
-> **Rename note:** This project was previously called L0-Python. The package/repository is being renamed to reliable-ai-streams-py. Existing imports remain supported. Install: `pip install reliable-ai-streams`
+> **Rename note:** This project was previously called L0-Python. The package/repository is being renamed to reliable-ai-streams-py. Existing imports remain supported. Install: `pip install reliable-ai-streams-py`
 
 ![L0: The Missing AI Reliability Substrate](img/l0-banner.jpg)
 
