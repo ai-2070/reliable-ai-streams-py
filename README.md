@@ -1,4 +1,4 @@
-# L0 - Deterministic Streaming Execution Substrate (DSES) for AI
+# L0 - Reliable AI Streams
 
 ### The missing reliability and observability layer for all AI streams.
 
