@@ -1,6 +1,6 @@
 [project]
 name = "ai2070-l0"
-version = "0.22.0"
+version = "0.21.1"
 description = "Reliability layer for AI/LLM streaming with retry, guardrails, and observability"
 readme = "README.md"
 requires-python = ">=3.10"
