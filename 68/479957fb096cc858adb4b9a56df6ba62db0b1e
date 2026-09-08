@@ -1,0 +1,24 @@
+.github/workflows/test.yml
+  h_64425bc75e3f3d 34-67
+README.md
+  h_64425bc75e3f3d 374,382-388
+pyproject.toml
+  h_64425bc75e3f3d 32,44
+tests/conftest.py
+  h_64425bc75e3f3d 29-38,59-64
+tests/test_openai_sdk.py
+  h_64425bc75e3f3d 1-246
+uv.lock
+  h_64425bc75e3f3d 2113-2191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.2",
+  "base_commit_sha": "68479957fb096cc858adb4b9a56df6ba62db0b1e",
+  "prompts": {},
+  "humans": {
+    "h_64425bc75e3f3d": {
+      "author": "LZL0 <12474488+LZL0@users.noreply.github.com>"
+    }
+  }
+}
