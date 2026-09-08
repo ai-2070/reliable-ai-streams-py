@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-openai = ["openai>=2.0,<3.0"]
+openai = ["openai>=2.0,<4.0"]
 litellm = ["litellm>=1.40,<2.0"]
 
 otel = [
@@ -41,7 +41,7 @@ sentry = [
     "sentry-sdk>=2.0,<3.0",
 ]
 observability = [
-    "ai2070-l0[otel,sentry]",
+    "reliable-ai-streams-py[otel,sentry]",
 ]
 
 speed = [

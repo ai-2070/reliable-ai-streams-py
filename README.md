@@ -371,13 +371,20 @@ uv add reliable-ai-streams-py --extra litellm
 
 | Extra | Packages |
 | ----- | -------- |
-| `openai` | `openai>=2.0,<3.0` |
+| `openai` | `openai>=2.0,<4.0` (SDK 2.x and 3.x) |
 | `litellm` | `litellm>=1.40` |
 | `otel` | `opentelemetry-api`, `opentelemetry-sdk`, `opentelemetry-instrumentation-httpx` |
 | `sentry` | `sentry-sdk` |
 | `observability` | `otel` + `sentry` combined |
 | `speed` | `uvloop` (Unix only) |
 | `dev` | `pytest`, `pytest-asyncio`, `pytest-cov`, `mypy`, `ruff` |
+
+Both OpenAI SDK majors are supported and covered in CI. SDK 3.x moved its HTTP
+transport from `httpx` to `httpx2`; L0 never touches the transport directly, so
+streams, tool calls, usage and retry classification behave identically on both.
+
+Note: current `litellm` releases require `openai<3`, so installing
+`[openai,litellm]` together resolves OpenAI to 2.x.
 
 ## License
 
