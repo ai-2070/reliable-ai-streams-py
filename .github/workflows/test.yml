@@ -31,3 +31,37 @@ jobs:
 
       - name: Run tests
         run: uv run pytest --tb=short --ignore=tests/integration
+
+  openai-majors:
+    name: openai ${{ matrix.label }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: "2.x"
+            spec: "openai>=2,<3"
+          - label: "3.x"
+            spec: "openai>=3,<4"
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.0.1
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      # The litellm extra is omitted: current litellm releases cap openai<3,
+      # so it cannot be co-installed with the 3.x leg.
+      - name: Install dependencies
+        run: uv sync --extra openai
+
+      - name: Pin openai to ${{ matrix.label }}
+        run: uv pip install "${{ matrix.spec }}"
+
+      - name: Run tests
+        run: uv run --no-sync pytest --tb=short --ignore=tests/integration
