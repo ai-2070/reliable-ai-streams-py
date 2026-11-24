@@ -38,7 +38,7 @@ otel = [
     "opentelemetry-instrumentation-httpx>=0.45,<1.0",
 ]
 sentry = [
-    "sentry-sdk>=2.0,<3.0",
+    "sentry-sdk>=3,<3.1",
 ]
 observability = [
     "reliable-ai-streams-py[otel,sentry]",
